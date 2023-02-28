@@ -1,6 +1,6 @@
 // Your First C++ Program
 #include <global.hpp>
-
+std::array<char, 1024> serBuff; // создаем массив размером 1024 байта
 
 
 struct FileDescriprion {
@@ -9,46 +9,109 @@ struct FileDescriprion {
 	std::string type;
 	UINT32 size;
 
-	// Функция сериализации структуры FileDescription
-	template<typename Archive>
-	void serialize(Archive& ar, const unsigned int version) {
-		ar& path;
-		ar& type;
-		ar& size;
+	// Бинарная сериализация
+	static void serialize(FileDescriprion const& value, Serializer& s) {
+		//Serializer s(buffer);
+		s(value.path);
+		s(value.type);
+		s(value.size);
+	}
+	// Бинарная десериализация
+	static void deserialize(FileDescriprion& value, Deserializer& d) {
+		//Deserializer d(buffer);
+		d(value.path);
+		d(value.type);
+		d(value.size);
 	}
 };
 
-// Структура ЗАПРОСА
-struct Request {
-	std::uint32_t lenRequest;   // Длина тела запроса
-	std::string path;           // тело запроса
-};
 
 
 // Структура ЗАГОЛОВКА ответа
 struct ResponseHead {
-	uint8_t type;	// тип данных
-	uint16_t len;	// длина ответа
+	uint32_t type;	// тип данных
+	uint32_t len;	// длина ответа
 	
-	template<typename Archive>
-	void serialize(Archive& ar, const unsigned int version) {
-		ar& type;
-		ar& len;
+public:
+	size_t serialize(asio::mutable_buffer & buffer) {
+		Serializer s(buffer);
+		s(type);
+		s(len);
+		buffer += s.offset();
+		return s.offset();
+	}
+
+	// Бинарная десериализация заголовка ответа
+	size_t deserialize(asio::mutable_buffer& buffer) {
+		Deserializer d(buffer);
+		d(type);
+		d(len);
+		buffer += d.offset();
+		return d.offset();
 	}
 };
 // Структура ТЕЛА ответа
 struct ResponseBody {
 	std::vector<FileDescriprion> files;
+	
+	// Бинарная сериализация  тела ответа
+	std::size_t serialize(asio::mutable_buffer & buffer) {
+		Serializer s(buffer);
+		uint32_t len = static_cast<uint32_t>(files.size());
+		s(len);
+		for (auto const& elem : files) {
+			elem.serialize(elem, s);
+		}
+		buffer += s.offset();
+		return s.offset();
+	}
+	void deserialize(asio::mutable_buffer & buffer) {
+		Deserializer d(buffer);
+		uint32_t len;
+		d(len); // считываем количество файлов
+		files.resize(len);
+		for (auto & elem : files) {
+			elem.deserialize(elem, d);
+		}
+		buffer += d.offset();
+		// return d.offset(); затруднительно посчитать реальную длину на выходе
+	}
+};
+struct RequestBody {
+	std::vector<uint8_t> buff;
 
-	// Функция сериализации тела ответа
-	template<typename Archive>
-	void serialize(Archive& ar, const unsigned int version) {
-		ar& files;
+	// Бинарная сериализация ЗАПРОСА
+	std::size_t serialize(asio::mutable_buffer& buffer) {
+		Serializer s(buffer);
+		s(buff);
+		buffer += s.offset();
+		return s.offset();
+	}
+
+	// Бинарная сериализация ЗАПРОСА
+	std::size_t deserialize(asio::mutable_buffer& buffer) {
+		Deserializer d(buffer);
+		d(buff);
+
+		buffer += d.offset();
+		return buff.size();	// Почему не d.offset() ? 
+		// дело в том что при десереализации количество данных на выходе не равно offset()
+		// offset() учитывает и количество байт затраченых на длины типов данных
 	}
 };
 
-namespace fs = std::filesystem;
+// Структура ЗАПРОСА
+struct Request {
+	ResponseHead head;
+	RequestBody body;
+};
+// Структура ОТВЕТА
+struct Response {
+	ResponseHead head;
+	ResponseBody body;
+};
 
+namespace fs = std::filesystem;
 // методы для работы с кэшем
 struct cache {
 	bool is_cache(const fs::path& directory_path) {
@@ -61,28 +124,30 @@ struct cache {
 	}
 };
 
-// Класс ответа
-class tcpMessage : cache {
 
+// Методы для работы с файлами
+class FileManager {
 public:
-	// Конструктор для сервера(С помощью пути заполняем данными о списке файлов)
-	tcpMessage(const fs::path& directory_path) {
-		body.files.clear();
-		setData(directory_path);
-	}
-	// Конструктор для клиента(чтобы из сериализованных даных получить всю информацию)
-	tcpMessage(const std::string& stringstream) {
-		std::istringstream ioarchive_header(stringstream);
-		boost::archive::binary_iarchive ioarchive(ioarchive_header);
-		ioarchive >> head;
-		ioarchive >> body;
-	}
+	// Запись списка файлов в вектор по указанному пути
+	void WriteFileList(std::vector<FileDescriprion>& files, const fs::path& directory_path) {
+		files.clear();
+		if (fs::is_directory(directory_path))
+			for (const auto& entry : fs::directory_iterator(directory_path)) {
+				//{<путь к файлу>, <тип файла>, <размер файла>}
+				files.push_back({
+					entry.path().string(),
+					get_file_type(entry),
+					static_cast<uint32_t>(fs::file_size(entry.path())),
+					});
+#ifdef _DEBUG
+				// Выводим список для отладки
+				const fs::path& file_path = entry.path();
+				const std::string& file_type = get_file_type(entry);
+				const uintmax_t file_size = fs::file_size(file_path);
+				std::cout << "{" << file_path << ", " << file_type << ", " << file_size << "}" << std::endl;
+#endif
+			}
 
-	const std::string getSerilizeData() {
-		std::ostringstream archive_stream;
-		boost::archive::binary_oarchive archive(archive_stream);
-		archive << head << body;
-		return archive_stream.str();
 	}
 private:
 	// метод для получения типа данных файла
@@ -97,36 +162,66 @@ private:
 			return "unknown";
 		}
 	}
-	void setData(const fs::path& directory_path) {
-		// Проверяем в cache
-		if (is_cache(directory_path)) {
-			setFromCache(body.files, directory_path);
-		}
-		else {
-			if (fs::is_directory(directory_path))
-				for (const auto& entry : fs::directory_iterator(directory_path)) {
-					//{<путь к файлу>, <тип файла>, <размер файла>}
-					body.files.push_back({
-						entry.path().string(),
-						get_file_type(entry),
-						static_cast<uint32_t>(fs::file_size(entry.path())),
-						});
-#ifdef _DEBUG
-					const fs::path& file_path = entry.path();
-					const std::string& file_type = get_file_type(entry);
-					const uintmax_t file_size = fs::file_size(file_path);
-					std::cout << "{" << file_path << ", " << file_type << ", " << file_size << "}" << std::endl;
-#endif
-				}
-		}
-	}
-
-	ResponseBody body;
-	ResponseHead head;
 };
 
 
+// Класс ответа
+class TcpPackage :FileManager {
+public:
+	void * requestHeadData() {
+		return &request.head;
+	}
+	size_t requestHeadSizeof() {
+		return sizeof(request.head);
+	}
 
+	std::vector<uint8_t>* requestBodyData() {
+		// Тут можно было бы десерелиазовать заголовок для получения длины тела
+		// но в этом нет смысла т.к сейчас заголовок состоит из простых типов данных
+		// и сериализация его не меняет
+
+		request.body.buff.resize(request.head.len);
+		return &request.body.buff;
+	}
+	void makeResponse(std::shared_ptr<std::vector<uint8_t>> DATA)
+	{
+		switch (request.head.type) {
+		case 1:
+			size_t lenHead, lenBody;
+			//************************десериализуем тело запроса***************************
+			{
+				DATA->resize(1024); 
+				asio::mutable_buffer buffer(request.body.buff.data(), request.body.buff.size());// сериализация пока только с mutable_buffer(для скорости)
+				lenBody = request.body.deserialize(buffer);
+				// Преобразование array в строку
+				std::string spath(request.body.buff.begin(), request.body.buff.end());
+				fs::path file_path = fs::path(spath);
+				// Заполняем информацию о файлах по пути file_path
+				WriteFileList(response.body.files, file_path);
+				DATA->resize(response.body.files.size() * sizeof(response.body.files) + 1024); // на всякий слачай резирвируем больше данных чтобы десереализованные данные не вышли за границу
+
+			}
+			// Сериализуем данные для дальнейшей отправки
+			asio::mutable_buffer buffer(DATA->data(), DATA->size());
+			Response* ptrResponse = reinterpret_cast<Response*>(buffer.data());
+
+			lenHead = response.head.serialize(buffer);
+			lenBody = response.body.serialize(buffer);
+
+			ptrResponse->head.type = request.head.type; //копируем тип
+			ptrResponse->head.len = lenBody; // записываем длину пакета
+			DATA->resize(lenHead + lenBody);
+			break;
+		}
+		
+	}
+	TcpPackage() {
+		request.body.buff.reserve(DEFAULT_BUFFSIZE_FOR_TCP_PACKAGE);		// Резервируем для сырых данных принятых по сети
+	}
+private:
+	Request request;		// структура запроса
+	Response response;		// структура ответа
+};
 
 
 class Session : public std::enable_shared_from_this<Session>
@@ -145,12 +240,11 @@ private:
 	// чтение заголовка запроса
 	void doReadHeader() {
 		auto self = shared_from_this();
-		asio::async_read(socket_, asio::buffer(&request_.lenRequest, sizeof(request_.lenRequest)),
-			[this, self](std::error_code ec, std::size_t len) {
+		auto tcpPackage = std::make_shared<TcpPackage>();
+		asio::async_read(socket_, asio::buffer(tcpPackage->requestHeadData(), tcpPackage->requestHeadSizeof()),
+			[this, self, tcpPackage](std::error_code ec, std::size_t len) {
 				if (!ec) {
-					request_.path.clear();
-					request_.path.resize(request_.lenRequest);
-					doReadBody();
+					doReadBody(tcpPackage);
 				}
 				else {
 					// обработка ошибки
@@ -159,33 +253,20 @@ private:
 			});
 	}
 	// Чтение тела запроса
-	void doReadBody() {
+	void doReadBody(std::shared_ptr<TcpPackage> tcpPackage) {
 		auto self = shared_from_this();
-		asio::async_read(socket_, asio::buffer(request_.path),
-			[this, self](std::error_code ec, std::size_t len) {
+		asio::async_read(socket_, asio::buffer(tcpPackage->requestBodyData()->data(), tcpPackage->requestBodyData()->size()),
+			[this, self, tcpPackage](std::error_code ec, std::size_t len) {
 				if (!ec) {
-					std::cout << "Recieved message: " << request_.path.data() << std::endl;
-
-					//**************************ФОРМИРУЕМ ДАННЫЕ ДЛЯ ОТВЕТА****************************
-					tcpMessage msg(fs::path(request_.path));
-					std::string serMsg = msg.getSerilizeData();
-
-					// Создаем вектор в куче чтобы сделать на него умный указатель 
-					// и передавать асинхронно по сети
-					std::vector<asio::const_buffer>* vecPtrMsg = new std::vector<asio::const_buffer>();
-					std::shared_ptr<std::vector<asio::const_buffer>> vecSharedPtrMsg(vecPtrMsg);
-
-					// Сначала записываем длину заголовка а потом сериализованные данные
-					uint32_t size = static_cast<std::uint32_t>(serMsg.size());
-
-					// чтобы скопировать uint32_t в вектор приходится извращаться.....
-					vecSharedPtrMsg->resize(1); // устанавливаем размер вектора на 1 элемент
-					std::memcpy(vecSharedPtrMsg->data(), &size, sizeof(size)); // копируем значение size в начало буфера вектора
-
-					vecSharedPtrMsg->push_back(asio::buffer(serMsg));
+					// Выводим ответ на экран
+					std::cout << "Recieved message: ";
+					std::cout.write((char *)tcpPackage->requestBodyData()->data(), tcpPackage->requestBodyData()->size());
+					std::cout << std::endl;
+					//**************************ФОРМИРУЕМ ДАННЫЕ ДЛЯ ОТВЕТА***************************
+					auto package = std::make_shared<std::vector<uint8_t>>();
+					tcpPackage->makeResponse(package);
+					doWrite(package);
 					//**********************************************************************************
-
-					doWrite(vecSharedPtrMsg); // отправляем ответ
 				}
 				else {
 					// обработка ошибки
@@ -194,7 +275,7 @@ private:
 			});
 	}
 	// отправка данных
-	void doWrite(std::shared_ptr<std::vector<asio::const_buffer>>& message)
+	void doWrite(std::shared_ptr<std::vector<uint8_t>>& message)
 	{
 		auto self = shared_from_this();
 		asio::async_write(socket_, asio::buffer(*message, message->size()),
@@ -249,7 +330,7 @@ private:
 
 int main()
 {
-	std::cout << "Start TCP SERVER" << std::endl;
+	std::cout << "************** Start TCP SERVER **************" << std::endl;
 
 	asio::io_context io_context;
 	Server server(io_context, 12346);

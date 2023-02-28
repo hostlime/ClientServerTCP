@@ -12,6 +12,7 @@
 #include <filesystem>
 
 #include <array>
+/*
 #include<boost/serialization/serialization.hpp>
 #include<boost/serialization/nvp.hpp>
 
@@ -20,7 +21,7 @@
 
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
-
+*/
 #ifdef _WIN32
  #define _WIN32_WINNT 0x0A00
 #endif
@@ -31,4 +32,8 @@
 #include <asio/ts/internet.hpp>
 
 
+#include<customSerialization.hpp>
+
+
+#define DEFAULT_BUFFSIZE_FOR_TCP_PACKAGE	1024
 #endif
