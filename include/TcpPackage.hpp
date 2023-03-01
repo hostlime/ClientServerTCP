@@ -7,6 +7,14 @@
 
 namespace TcpPackage
 {
+	////////////////////Список типов поддерживаемых пакетов////////////////////////
+	enum PackageType : uint32_t {
+		GetFileList_TYPE = 80, // Получение списка файлов по заданному пути
+		TYPE_2, // пример
+		TYPE_3 // пример
+	};
+	/// ///////////////////////////////////////////////////////////////////////////
+
 	namespace File
 	{
 		struct FileDescriprion {
@@ -130,18 +138,19 @@ namespace fs = std::filesystem;
 				files.clear();
 				if (fs::is_directory(directory_path))
 					for (const auto& entry : fs::directory_iterator(directory_path)) {
+						// Иногда файл занят и вылетает ошибка при получении размера поэтому проверяем на занятость
+						uint32_t fileSize = is_file_in_use(entry.path()) ? 0 : static_cast<uint32_t>(fs::file_size(entry.path()));
 						//{<путь к файлу>, <тип файла>, <размер файла>}
 						files.push_back({
 							entry.path().string(),
 							get_file_type(entry),
-							static_cast<uint32_t>(fs::file_size(entry.path())),
+							fileSize,
 							});
 #ifdef _DEBUG
 						// Выводим список для отладки
 						const fs::path& file_path = entry.path();
 						const std::string& file_type = get_file_type(entry);
-						const uintmax_t file_size = fs::file_size(file_path);
-						std::cout << "{" << file_path << ", " << file_type << ", " << file_size << "}" << std::endl;
+						std::cout << "{" << file_path << ", " << file_type << ", " << fileSize << "}" << std::endl;
 #endif
 					}
 
@@ -158,6 +167,18 @@ namespace fs = std::filesystem;
 				else {
 					return "unknown";
 				}
+			}
+			// метод проверяет свободен файл или кем-то други занят
+			bool is_file_in_use(const std::filesystem::path& filepath)
+			{
+				std::error_code ec;
+				auto status = std::filesystem::status(filepath, ec);
+				if (ec)
+				{
+					// Обработка ошибки
+					return true;
+				}
+				return ((status.permissions() & std::filesystem::perms::owner_write) == std::filesystem::perms::none);
 			}
 		};
 	}
@@ -184,7 +205,7 @@ public:
 	void makeResponse(std::shared_ptr<std::vector<uint8_t>> DATA)
 	{
 		switch (request.head.type) {
-		case 1:
+		case GetFileList_TYPE:
 			size_t lenHead, lenBody;
 			//************************десериализуем тело запроса***************************
 			{
@@ -214,6 +235,12 @@ public:
 			ptrResponse->head.len = static_cast<uint32_t>(lenBody); // записываем длину пакета
 			DATA->resize(lenHead + lenBody);
 			break;
+			/*
+		case TYPE_2:
+			break;
+		case TYPE_3:
+
+			break;*/
 		}
 
 	}

@@ -32,5 +32,5 @@
 #include<TcpPackage.hpp>
 
 #define  DEFAULT_PORT  12345
-
+#define  DEFAULT_HOST  "localhost"
 #endif

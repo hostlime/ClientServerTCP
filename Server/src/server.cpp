@@ -23,7 +23,10 @@ private:
 		asio::async_read(socket_, asio::buffer(tcpPackage->requestHeadData(), tcpPackage->requestHeadSizeof()),
 			[this, self, tcpPackage](std::error_code ec, std::size_t len) {
 				if (!ec) {
-					doReadBody(tcpPackage);
+					// Есть данные для приема тела ?
+					if (tcpPackage->requestBodyData()->size()) {
+						doReadBody(tcpPackage);
+					} else doReadHeader();
 				} else {
 					// обработка ошибки
 					std::cerr << "Error while reading header: " << ec.message() << std::endl;
@@ -100,6 +103,8 @@ private:
 int main(int argc, char* argv[]){
 	//*******************ПОЛУЧЕНИЕ ПОРТА ДЛЯ ПРОСЛУШИВАНИЯ**********************
 	uint16_t port = DEFAULT_PORT;
+#ifndef _DEBUG
+	// в режиме дебага выключаем
 	if (argc > 1) { // Переданы аргументы?
 		std::istringstream iss(argv[1]);
 		if (iss >> port) {
@@ -126,6 +131,7 @@ int main(int argc, char* argv[]){
 			}
 		}
 	}
+#endif
 	//************************************************************************
 
 	std::cout << "************** Start TCP SERVER **************" << std::endl;

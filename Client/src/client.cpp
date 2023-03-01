@@ -5,192 +5,140 @@
 
 using asio::ip::tcp;
 
-struct FileDescriprion {
-	//{<путь к файлу>, <тип файла>, <размер файла>}
-	std::string path;
-	std::string type;
-	UINT32 size;
+int main(int argc, char* argv[])
+{
+    uint16_t port = DEFAULT_PORT;
+    std::string host = DEFAULT_HOST;
 
-	// Бинарная сериализация
-	static void serialize(FileDescriprion const& value, Serializer& s) {
-		//Serializer s(buffer);
-		s(value.path);
-		s(value.type);
-		s(value.size);
-	}
-	// Бинарная десериализация
-	static void deserialize(FileDescriprion& value, Deserializer& d) {
-		//Deserializer d(buffer);
-		d(value.path);
-		d(value.type);
-		d(value.size);
-	}
-};
+//#ifndef _DEBUG
+    //*******************ПОЛУЧЕНИЕ ПОРТА ДЛЯ ПРОСЛУШИВАНИЯ**********************
+    if (argc > 1) {
+        std::istringstream iss(argv[1]);
+        if (iss >> port) {
+            std::cout << "Using port " << port << " from command line argument." << std::endl;
+        }
+        else {
+            std::cout << "Invalid port number provided. Using default port " << DEFAULT_PORT << "." << std::endl;
+            port = DEFAULT_PORT;
+        }
+    }
+
+    if (argc > 2) {
+        host = argv[2];
+        std::cout << "Using host " << host << " from command line argument." << std::endl;
+    }
+
+    if (argc <= 1) {
+        std::cout << "Enter a port number or press enter to use the default port (" << DEFAULT_PORT << "): ";
+        std::string input;
+        std::getline(std::cin, input);
+
+        if (!input.empty()) {
+            std::istringstream iss(input);
+            if (iss >> port) {
+                std::cout << "Using port " << port << "." << std::endl;
+            }
+            else {
+                std::cout << "Invalid port number provided. Using default port " << DEFAULT_PORT << "." << std::endl;
+                port = DEFAULT_PORT;
+            }
+        }
+    }
+
+    if (argc <= 2) {
+        std::cout << "Enter a host or press enter to use the default host (" << DEFAULT_HOST << "): ";
+        std::string input;
+        std::getline(std::cin, input);
+
+        if (!input.empty()) {
+            host = input;
+            std::cout << "Using host " << host << "." << std::endl;
+        }
+    }
+//#endif
+    //************************************************************************
 
 
 
-// Структура ЗАГОЛОВКА ответа
-struct ResponseHead {
-	uint32_t type;	// тип данных
-	uint32_t len;	// длина ответа
-
-public:
-	size_t serialize(asio::mutable_buffer& buffer) {
-		Serializer s(buffer);
-		s(type);
-		s(len);
-		buffer += s.offset();
-		return s.offset();
-	}
-
-	// Бинарная десериализация заголовка ответа
-	size_t deserialize(asio::mutable_buffer& buffer) {
-		Deserializer d(buffer);
-		d(type);
-		d(len);
-		buffer += d.offset();
-		return d.offset();
-	}
-};
-// Структура ТЕЛА ответа
-struct ResponseBody {
-	std::vector<FileDescriprion> files;
-
-	// Бинарная сериализация  тела ответа
-	std::size_t serialize(asio::mutable_buffer& buffer) {
-		Serializer s(buffer);
-		uint32_t len = static_cast<uint32_t>(files.size());
-		s(len);
-		for (auto const& elem : files) {
-			elem.serialize(elem, s);
-		}
-		buffer += s.offset();
-		return s.offset();
-	}
-	void deserialize(asio::mutable_buffer& buffer) {
-		Deserializer d(buffer);
-		uint32_t len;
-		d(len); // считываем количество файлов
-		files.resize(len);
-		for (auto& elem : files) {
-			elem.deserialize(elem, d);
-		}
-		buffer += d.offset();
-		// return d.offset(); затруднительно посчитать реальную длину на выходе
-	}
-};
-struct RequestBody {
-	std::vector<uint8_t> buff;
-
-	// Бинарная сериализация ЗАПРОСА
-	std::size_t serialize(asio::mutable_buffer& buffer) {
-		Serializer s(buffer);
-		s(buff);
-		buffer += s.offset();
-		return s.offset();
-	}
-
-	// Бинарная сериализация ЗАПРОСА
-	std::size_t deserialize(asio::mutable_buffer& buffer) {
-		Deserializer d(buffer);
-		d(buff);
-
-		buffer += d.offset();
-		return buff.size();	// Почему не d.offset() ? 
-		// дело в том что при десереализации количество данных на выходе не равно offset()
-		// offset() учитывает и количество байт затраченых на длины типов данных
-	}
-};
-
-// Структура ЗАПРОСА
-struct Request {
-	ResponseHead head;
-	RequestBody body;
-};
-// Структура ОТВЕТА
-struct Response {
-	ResponseHead head;
-	ResponseBody body;
-};
-
-const int max_length = 10240;
-
-int main(int argc, char* argv[]) {
-    std::cout << "Start TCP CLIENT" << std::endl;
+    std::cout << "************** Start TCP CLIENT **************" << std::endl;
     // Установка локали для корректного отображения русских букв
     std::locale::global(std::locale("en_US.utf8"));
 
+    // 
+    TcpPackage::Request request;            // структура запроса
+    TcpPackage::Response response;          // структура ответа
+    std::vector<uint8_t> Buff(2048);        // буфер для приема и передачи
+
         while (true) {
-            Request request;
-            // Читаем пользовательский ввод из консоли
-            std::cout << "Введите запрос: ";
-            std::string input;
-            std::getline(std::cin, input);
-
-            // Формируем структуру запроса
-            request.head.type = 1;
-            request.head.len = input.size();
-
-            request.body.buff.reserve(input.size());
-            request.body.buff.resize(input.size());
-            std::memcpy(request.body.buff.data(), input.c_str(), input.size());
-
-            //Буффер для отправки
-            std::vector<uint8_t> sendBuff(1024);
-            asio::mutable_buffer buffer(sendBuff.data(), sendBuff.capacity());
-
-            Request* ptrHead = reinterpret_cast<Request*>(buffer.data());
-            size_t lenHead, lenBody;
-            lenHead = request.head.serialize(buffer);
-            lenBody = request.body.serialize(buffer);
-            ptrHead->head.len = lenBody;
-            sendBuff.resize(lenHead + lenBody);
-
-            //std::vector<asio::const_buffer> buffers;
-
-
-            //buffers.push_back(asio::buffer(&request.lenRequest, sizeof(request.lenRequest)));
-            //buffers.push_back(asio::buffer(request.path));
             {
-
                 try {
-                // Инициализируем библиотеку asio
-                asio::io_context io_context;
+                    // Инициализируем библиотеку asio
+                    asio::io_context io_context;
 
-                // Создаем объекты для соединения с сервером и отправки данных
-                tcp::socket socket(io_context);
-                tcp::resolver resolver(io_context);
-                asio::connect(socket, resolver.resolve("localhost", "12346"));
+                    // Создаем объекты для соединения с сервером и отправки данных
+                    tcp::socket socket(io_context);
+                    tcp::resolver resolver(io_context);
+                    asio::connect(socket, resolver.resolve(host, std::to_string(port)));
+                    std::cout << "Соединение с сервером "<< host << ":" << port <<" установлено!" << std::endl;
+                    std::cout << "Примеры запроса: 'c:/' или 'd:/music' " << std::endl;
+                    while (true) {
+                        Buff.clear();
+                        Buff.reserve(2048);
+                        // Читаем пользовательский ввод из консоли
+                        std::cout << "Введите запрос: ";
+                        std::string input;
+                        std::getline(std::cin, input);
 
-                // Отправляем запрос на сервер
-                //asio::write(socket, buffers);
-                asio::write(socket, asio::buffer(sendBuff));
+                        // Формируем структуру запроса
+                        request.head.type = TcpPackage::GetFileList_TYPE;
+                        request.head.len = static_cast<uint32_t>(input.size());
+                        // резервируем место в буфере
 
-                // Получаем ответ от сервера
-                char response[max_length];
-				ResponseHead Body;
-                size_t response_length = asio::read(socket, asio::buffer(&Body, sizeof(Body)));
-                std::cerr << "Ожидаем прием тела длиной: " << Body.len << std::endl;
+                        request.body.buff.resize(input.size());
+                        std::memcpy(request.body.buff.data(), input.c_str(), input.size());
+                        {
+                            //Указатель на буфер для ускорения сериализации
+                            asio::mutable_buffer buffer(Buff.data(), Buff.capacity() + 4);
+                            // указатель на ачало чтобы потом вписать длину тела
+                            TcpPackage::Request* ptrHead = reinterpret_cast<TcpPackage::Request*>(buffer.data());
+                            size_t lenHead, lenBody;
 
-                response_length = asio::read(socket, asio::buffer(response, Body.len));
+                            // сериализуем запрос
+                            lenHead = request.head.serialize(buffer);
+                            lenBody = request.body.serialize(buffer);
+                            ptrHead->head.len = static_cast<uint32_t>(lenBody);
+                            Buff.resize(lenHead + lenBody);
 
-                // Выводим ответ на экран
-                std::cout << "Ответ от сервера: " << std::endl;
+                            // Отправляем запрос на сервер
+                            asio::write(socket, asio::buffer(Buff.data(), Buff.size()));
+                        }
+
+
+                        // Получаем ответ от сервера
+                        size_t response_length = asio::read(socket, asio::buffer(&response, sizeof(response.head)));
+                        std::cerr << "Ожидаем прием тела длиной: " << response.head.len << std::endl;
+                        
+                        // Резервируем пространство под данные
+                        Buff.resize(response.head.len);
+                        response_length = asio::read(socket, asio::buffer(Buff));
+
+                        // Выводим ответ на экран
+                        std::cout << "Ответ от сервера: " << std::endl;
+
+                        asio::mutable_buffer bufferFile(Buff.data(), Buff.size());
+                        response.body.deserialize(bufferFile);
+
+                        for (auto& elem : response.body.files) {
+                            std::cout << "{" << elem.path << ", " << elem.type << ", " << elem.size << "}" << std::endl;
+                        }
+
+                        std::cout << std::endl;
+                    }
+                } catch (std::exception& e) {
+                    std::cerr << "Ошибка подключения к " <<host<<":"<< port << std::endl <<"e.what()->" << e.what() << std::endl;
+                    Sleep(1000);
+                }
                 
-				ResponseBody body;
-
-				asio::mutable_buffer buffer(response, Body.len);
-				body.deserialize(buffer);
-
-				for (auto& elem : body.files) {
-					std::cout << "{" << elem.path << ", " << elem.type << ", " << elem.size << "}" << std::endl;
-				}
-
-                std::cout << std::endl;
-                }
-                catch (std::exception& e) {
-                    std::cerr << "Ошибка: " << e.what() << std::endl;
-                }
             }
         }
 
