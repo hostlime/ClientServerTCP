@@ -1,6 +1,5 @@
 
 #include <iostream>
-#include <locale>
 
 #include <global.hpp>
 
@@ -81,13 +80,13 @@ int main(int argc, char* argv[])
                     tcp::socket socket(io_context);
                     tcp::resolver resolver(io_context);
                     asio::connect(socket, resolver.resolve(host, std::to_string(port)));
-                    std::cout << "Соединение с сервером "<< host << ":" << port <<" установлено!" << std::endl;
-                    std::cout << "Примеры запроса: 'c:/' или 'd:/music' " << std::endl;
+                    std::cout << "Connection to server " << host << ":" << port << " established!" << std::endl;
+                    std::cout << "Request examples: 'c:/' or 'd:/music' " << std::endl;
                     while (true) {
                         Buff.clear();
                         Buff.resize(2048);
                         // Читаем пользовательский ввод из консоли
-                        std::cout << "Введите запрос: ";
+                        std::cout << "Enter query: ";
                         std::string input;
                         std::getline(std::cin, input);
 
@@ -119,14 +118,14 @@ int main(int argc, char* argv[])
 
                         // Получаем ответ от сервера
                         size_t response_length = asio::read(socket, asio::buffer(&response, sizeof(response.head)));
-                        std::cerr << "Ожидаем прием тела длиной: " << response.head.len << std::endl;
+                        std::cerr << "Expect a body length: " << response.head.len << std::endl;
                         
                         // Резервируем пространство под данные
                         Buff.resize(response.head.len);
                         response_length = asio::read(socket, asio::buffer(Buff));
 
                         // Выводим ответ на экран
-                        std::cout << "Ответ от сервера: " << std::endl;
+                        std::cout << "Response from server: " << std::endl;
 
                         asio::mutable_buffer bufferFile(Buff.data(), Buff.size());
                         response.body.deserialize(bufferFile);
@@ -138,7 +137,7 @@ int main(int argc, char* argv[])
                         std::cout << std::endl;
                     }
                 } catch (std::exception& e) {
-                    std::cerr << "Ошибка подключения к " <<host<<":"<< port << std::endl <<"e.what()->" << e.what() << std::endl;
+                    std::cerr << "Error connecting to " << host << ":" << port << std::endl << "e.what()->" << e.what() << std::endl;
                     Sleep(1000);
                 }
                 
