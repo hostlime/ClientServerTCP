@@ -16,7 +16,7 @@ set(CMAKE_DEBUG_POSTFIX _g)
 include_directories(include)
 
 # Добавить клиентскую часть
-add_subdirectory(client)
+add_subdirectory(Client)
 
 # Добавить серверную часть
-add_subdirectory(server)
+add_subdirectory(Server)

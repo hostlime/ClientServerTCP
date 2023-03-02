@@ -1,36 +1,41 @@
 #ifndef TCP_PACKAGE_HPP
 #define TCP_PACKAGE_HPP
 
+#include <filesystem>
+#include <asio/ts/buffer.hpp>
+#include<CustomSerializ.hpp>
+
+
 #define DEFAULT_BUFFSIZE_FOR_TCP_PACKAGE	1024
 
 
 
 namespace TcpPackage
 {
-	////////////////////Список типов поддерживаемых пакетов////////////////////////
+	////////////////////РЎРїРёСЃРѕРє С‚РёРїРѕРІ РїРѕРґРґРµСЂР¶РёРІР°РµРјС‹С… РїР°РєРµС‚РѕРІ////////////////////////
 	enum PackageType : uint32_t {
-		GetFileList_TYPE = 80, // Получение списка файлов по заданному пути
-		TYPE_2, // пример
-		TYPE_3 // пример
+		GetFileList_TYPE = 80, // РџРѕР»СѓС‡РµРЅРёРµ СЃРїРёСЃРєР° С„Р°Р№Р»РѕРІ РїРѕ Р·Р°РґР°РЅРЅРѕРјСѓ РїСѓС‚Рё
+		TYPE_2, // РїСЂРёРјРµСЂ
+		TYPE_3 // РїСЂРёРјРµСЂ
 	};
 	/// ///////////////////////////////////////////////////////////////////////////
 
 	namespace File
 	{
 		struct FileDescriprion {
-			//{<путь к файлу>, <тип файла>, <размер файла>}
+			//{<РїСѓС‚СЊ Рє С„Р°Р№Р»Сѓ>, <С‚РёРї С„Р°Р№Р»Р°>, <СЂР°Р·РјРµСЂ С„Р°Р№Р»Р°>}
 			std::string path;
 			std::string type;
 			uint32_t size = 0;
 
-			// Бинарная сериализация
+			// Р‘РёРЅР°СЂРЅР°СЏ СЃРµСЂРёР°Р»РёР·Р°С†РёСЏ
 			static void serialize(FileDescriprion const& value, CustomSerializ::Serializer& s) {
 				//Serializer s(buffer);
 				s(value.path);
 				s(value.type);
 				s(value.size);
 			}
-			// Бинарная десериализация
+			// Р‘РёРЅР°СЂРЅР°СЏ РґРµСЃРµСЂРёР°Р»РёР·Р°С†РёСЏ
 			static void deserialize(FileDescriprion& value, CustomSerializ::Deserializer& d) {
 				//Deserializer d(buffer);
 				d(value.path);
@@ -42,10 +47,10 @@ namespace TcpPackage
 
 
 
-	// Структура ЗАГОЛОВКА ответа
+	// РЎС‚СЂСѓРєС‚СѓСЂР° Р—РђР“РћР›РћР’РљРђ РѕС‚РІРµС‚Р°
 	struct ResponseHead {
-		uint32_t type = 0;	// тип данных
-		uint32_t len = 0;	// длина ответа
+		uint32_t type = 0;	// С‚РёРї РґР°РЅРЅС‹С…
+		uint32_t len = 0;	// РґР»РёРЅР° РѕС‚РІРµС‚Р°
 
 	public:
 		size_t serialize(asio::mutable_buffer& buffer) {
@@ -56,7 +61,7 @@ namespace TcpPackage
 			return s.offset();
 		}
 
-		// Бинарная десериализация заголовка ответа
+		// Р‘РёРЅР°СЂРЅР°СЏ РґРµСЃРµСЂРёР°Р»РёР·Р°С†РёСЏ Р·Р°РіРѕР»РѕРІРєР° РѕС‚РІРµС‚Р°
 		size_t deserialize(asio::mutable_buffer& buffer) {
 			CustomSerializ::Deserializer d(buffer);
 			d(type);
@@ -65,11 +70,11 @@ namespace TcpPackage
 			return d.offset();
 		}
 	};
-	// Структура ТЕЛА ответа
+	// РЎС‚СЂСѓРєС‚СѓСЂР° РўР•Р›Рђ РѕС‚РІРµС‚Р°
 	struct ResponseBody {
 		std::vector<File::FileDescriprion> files;
 
-		// Бинарная сериализация  тела ответа
+		// Р‘РёРЅР°СЂРЅР°СЏ СЃРµСЂРёР°Р»РёР·Р°С†РёСЏ  С‚РµР»Р° РѕС‚РІРµС‚Р°
 		std::size_t serialize(asio::mutable_buffer& buffer) {
 			CustomSerializ::Serializer s(buffer);
 			uint32_t len = static_cast<uint32_t>(files.size());
@@ -83,19 +88,19 @@ namespace TcpPackage
 		void deserialize(asio::mutable_buffer& buffer) {
 			CustomSerializ::Deserializer d(buffer);
 			uint32_t len;
-			d(len); // считываем количество файлов
+			d(len); // СЃС‡РёС‚С‹РІР°РµРј РєРѕР»РёС‡РµСЃС‚РІРѕ С„Р°Р№Р»РѕРІ
 			files.resize(len);
 			for (auto& elem : files) {
 				elem.deserialize(elem, d);
 			}
 			buffer += d.offset();
-			// return d.offset(); затруднительно посчитать реальную длину на выходе
+			// return d.offset(); Р·Р°С‚СЂСѓРґРЅРёС‚РµР»СЊРЅРѕ РїРѕСЃС‡РёС‚Р°С‚СЊ СЂРµР°Р»СЊРЅСѓСЋ РґР»РёРЅСѓ РЅР° РІС‹С…РѕРґРµ
 		}
 	};
 	struct RequestBody {
 		std::vector<uint8_t> buff;
 
-		// Бинарная сериализация ЗАПРОСА
+		// Р‘РёРЅР°СЂРЅР°СЏ СЃРµСЂРёР°Р»РёР·Р°С†РёСЏ Р—РђРџР РћРЎРђ
 		std::size_t serialize(asio::mutable_buffer& buffer) {
 			CustomSerializ::Serializer s(buffer);
 			s(buff);
@@ -103,24 +108,24 @@ namespace TcpPackage
 			return s.offset();
 		}
 
-		// Бинарная сериализация ЗАПРОСА
+		// Р‘РёРЅР°СЂРЅР°СЏ СЃРµСЂРёР°Р»РёР·Р°С†РёСЏ Р—РђРџР РћРЎРђ
 		std::size_t deserialize(asio::mutable_buffer& buffer) {
 			CustomSerializ::Deserializer d(buffer);
 			d(buff);
 
 			buffer += d.offset();
-			return buff.size();	// Почему не d.offset() ? 
-			// дело в том что при десереализации количество данных на выходе не равно offset()
-			// offset() учитывает и количество байт затраченых на длины типов данных
+			return buff.size();	// РџРѕС‡РµРјСѓ РЅРµ d.offset() ? 
+			// РґРµР»Рѕ РІ С‚РѕРј С‡С‚Рѕ РїСЂРё РґРµСЃРµСЂРµР°Р»РёР·Р°С†РёРё РєРѕР»РёС‡РµСЃС‚РІРѕ РґР°РЅРЅС‹С… РЅР° РІС‹С…РѕРґРµ РЅРµ СЂР°РІРЅРѕ offset()
+			// offset() СѓС‡РёС‚С‹РІР°РµС‚ Рё РєРѕР»РёС‡РµСЃС‚РІРѕ Р±Р°Р№С‚ Р·Р°С‚СЂР°С‡РµРЅС‹С… РЅР° РґР»РёРЅС‹ С‚РёРїРѕРІ РґР°РЅРЅС‹С…
 		}
 	};
 
-	// Структура ЗАПРОСА
+	// РЎС‚СЂСѓРєС‚СѓСЂР° Р—РђРџР РћРЎРђ
 	struct Request {
 		ResponseHead head;
 		RequestBody body;
 	};
-	// Структура ОТВЕТА
+	// РЎС‚СЂСѓРєС‚СѓСЂР° РћРўР’Р•РўРђ
 	struct Response {
 		ResponseHead head;
 		ResponseBody body;
@@ -130,24 +135,24 @@ namespace TcpPackage
 namespace fs = std::filesystem;
 	namespace FileMethods
 	{
-		// Методы для работы с файлами
+		// РњРµС‚РѕРґС‹ РґР»СЏ СЂР°Р±РѕС‚С‹ СЃ С„Р°Р№Р»Р°РјРё
 		class FileManager {
 		public:
-			// Запись списка файлов в вектор по указанному пути
+			// Р—Р°РїРёСЃСЊ СЃРїРёСЃРєР° С„Р°Р№Р»РѕРІ РІ РІРµРєС‚РѕСЂ РїРѕ СѓРєР°Р·Р°РЅРЅРѕРјСѓ РїСѓС‚Рё
 			void WriteFileList(std::vector<TcpPackage::File::FileDescriprion>& files, const fs::path& directory_path) {
 				files.clear();
 				if (fs::is_directory(directory_path))
 					for (const auto& entry : fs::directory_iterator(directory_path)) {
-						// Иногда файл занят и вылетает ошибка при получении размера поэтому проверяем на занятость
+						// РРЅРѕРіРґР° С„Р°Р№Р» Р·Р°РЅСЏС‚ Рё РІС‹Р»РµС‚Р°РµС‚ РѕС€РёР±РєР° РїСЂРё РїРѕР»СѓС‡РµРЅРёРё СЂР°Р·РјРµСЂР° РїРѕСЌС‚РѕРјСѓ РїСЂРѕРІРµСЂСЏРµРј РЅР° Р·Р°РЅСЏС‚РѕСЃС‚СЊ
 						uint32_t fileSize = is_file_in_use(entry.path()) ? 0 : static_cast<uint32_t>(fs::file_size(entry.path()));
-						//{<путь к файлу>, <тип файла>, <размер файла>}
+						//{<РїСѓС‚СЊ Рє С„Р°Р№Р»Сѓ>, <С‚РёРї С„Р°Р№Р»Р°>, <СЂР°Р·РјРµСЂ С„Р°Р№Р»Р°>}
 						files.push_back({
 							entry.path().string(),
 							get_file_type(entry),
 							fileSize,
 							});
 #ifdef _DEBUG
-						// Выводим список для отладки
+						// Р’С‹РІРѕРґРёРј СЃРїРёСЃРѕРє РґР»СЏ РѕС‚Р»Р°РґРєРё
 						const fs::path& file_path = entry.path();
 						const std::string& file_type = get_file_type(entry);
 						std::cout << "{" << file_path << ", " << file_type << ", " << fileSize << "}" << std::endl;
@@ -156,7 +161,7 @@ namespace fs = std::filesystem;
 
 			}
 		private:
-			// метод для получения типа данных файла
+			// РјРµС‚РѕРґ РґР»СЏ РїРѕР»СѓС‡РµРЅРёСЏ С‚РёРїР° РґР°РЅРЅС‹С… С„Р°Р№Р»Р°
 			std::string get_file_type(const fs::directory_entry& entry) {
 				if (entry.is_directory()) {
 					return "directory";
@@ -168,14 +173,14 @@ namespace fs = std::filesystem;
 					return "unknown";
 				}
 			}
-			// метод проверяет свободен файл или кем-то други занят
+			// РјРµС‚РѕРґ РїСЂРѕРІРµСЂСЏРµС‚ СЃРІРѕР±РѕРґРµРЅ С„Р°Р№Р» РёР»Рё РєРµРј-С‚Рѕ РґСЂСѓРіРё Р·Р°РЅСЏС‚
 			bool is_file_in_use(const std::filesystem::path& filepath)
 			{
 				std::error_code ec;
 				auto status = std::filesystem::status(filepath, ec);
 				if (ec)
 				{
-					// Обработка ошибки
+					// РћР±СЂР°Р±РѕС‚РєР° РѕС€РёР±РєРё
 					return true;
 				}
 				return ((status.permissions() & std::filesystem::perms::owner_write) == std::filesystem::perms::none);
@@ -184,7 +189,7 @@ namespace fs = std::filesystem;
 	}
 
 
-// Класс ответа
+// РљР»Р°СЃСЃ РѕС‚РІРµС‚Р°
 class Msg : FileMethods::FileManager {
 public:
 	void* requestHeadData() {
@@ -195,9 +200,9 @@ public:
 	}
 
 	std::vector<uint8_t>* requestBodyData() {
-		// Тут можно было бы десерелиазовать заголовок для получения длины тела
-		// но в этом нет смысла т.к сейчас заголовок состоит из простых типов данных
-		// и сериализация его не меняет
+		// РўСѓС‚ РјРѕР¶РЅРѕ Р±С‹Р»Рѕ Р±С‹ РґРµСЃРµСЂРµР»РёР°Р·РѕРІР°С‚СЊ Р·Р°РіРѕР»РѕРІРѕРє РґР»СЏ РїРѕР»СѓС‡РµРЅРёСЏ РґР»РёРЅС‹ С‚РµР»Р°
+		// РЅРѕ РІ СЌС‚РѕРј РЅРµС‚ СЃРјС‹СЃР»Р° С‚.Рє СЃРµР№С‡Р°СЃ Р·Р°РіРѕР»РѕРІРѕРє СЃРѕСЃС‚РѕРёС‚ РёР· РїСЂРѕСЃС‚С‹С… С‚РёРїРѕРІ РґР°РЅРЅС‹С…
+		// Рё СЃРµСЂРёР°Р»РёР·Р°С†РёСЏ РµРіРѕ РЅРµ РјРµРЅСЏРµС‚
 
 		request.body.buff.resize(request.head.len);
 		return &request.body.buff;
@@ -207,32 +212,32 @@ public:
 		switch (request.head.type) {
 		case GetFileList_TYPE:
 			size_t lenHead, lenBody;
-			//************************десериализуем тело запроса***************************
+			//************************РґРµСЃРµСЂРёР°Р»РёР·СѓРµРј С‚РµР»Рѕ Р·Р°РїСЂРѕСЃР°***************************
 			{
 				DATA->resize(1024);
-				asio::mutable_buffer buffer(request.body.buff.data(), request.body.buff.size());// сериализация пока только с mutable_buffer(для скорости)
+				asio::mutable_buffer buffer(request.body.buff.data(), request.body.buff.size());// СЃРµСЂРёР°Р»РёР·Р°С†РёСЏ РїРѕРєР° С‚РѕР»СЊРєРѕ СЃ mutable_buffer(РґР»СЏ СЃРєРѕСЂРѕСЃС‚Рё)
 				lenBody = request.body.deserialize(buffer);
-				// Преобразование array в строку
+				// РџСЂРµРѕР±СЂР°Р·РѕРІР°РЅРёРµ array РІ СЃС‚СЂРѕРєСѓ
 				std::string spath(request.body.buff.begin(), request.body.buff.end());
 				fs::path file_path = fs::path(spath);
-				// Заполняем информацию о файлах по пути file_path
+				// Р—Р°РїРѕР»РЅСЏРµРј РёРЅС„РѕСЂРјР°С†РёСЋ Рѕ С„Р°Р№Р»Р°С… РїРѕ РїСѓС‚Рё file_path
 				WriteFileList(response.body.files, file_path);
 				DATA->resize(
-					response.body.files.size() * sizeof(response.body.files) // размер структуры
-					+ response.body.files.size() *(3*4)	// учитываем байт который добавляется при сериализации 
-					+ 1024 // просто запас
-				); // на всякий слачай резирвируем больше данных чтобы десереализованные данные не вышли за границу
+					response.body.files.size() * sizeof(response.body.files) // СЂР°Р·РјРµСЂ СЃС‚СЂСѓРєС‚СѓСЂС‹
+					+ response.body.files.size() *(3*4)	// СѓС‡РёС‚С‹РІР°РµРј Р±Р°Р№С‚ РєРѕС‚РѕСЂС‹Р№ РґРѕР±Р°РІР»СЏРµС‚СЃСЏ РїСЂРё СЃРµСЂРёР°Р»РёР·Р°С†РёРё 
+					+ 1024 // РїСЂРѕСЃС‚Рѕ Р·Р°РїР°СЃ
+				); // РЅР° РІСЃСЏРєРёР№ СЃР»Р°С‡Р°Р№ СЂРµР·РёСЂРІРёСЂСѓРµРј Р±РѕР»СЊС€Рµ РґР°РЅРЅС‹С… С‡С‚РѕР±С‹ РґРµСЃРµСЂРµР°Р»РёР·РѕРІР°РЅРЅС‹Рµ РґР°РЅРЅС‹Рµ РЅРµ РІС‹С€Р»Рё Р·Р° РіСЂР°РЅРёС†Сѓ
 
 			}
-			// Сериализуем данные для дальнейшей отправки
+			// РЎРµСЂРёР°Р»РёР·СѓРµРј РґР°РЅРЅС‹Рµ РґР»СЏ РґР°Р»СЊРЅРµР№С€РµР№ РѕС‚РїСЂР°РІРєРё
 			asio::mutable_buffer buffer(DATA->data(), DATA->size());
 			Response* ptrResponse = reinterpret_cast<Response*>(buffer.data());
 
 			lenHead = response.head.serialize(buffer);
 			lenBody = response.body.serialize(buffer);
 
-			ptrResponse->head.type = request.head.type; //копируем тип
-			ptrResponse->head.len = static_cast<uint32_t>(lenBody); // записываем длину пакета
+			ptrResponse->head.type = request.head.type; //РєРѕРїРёСЂСѓРµРј С‚РёРї
+			ptrResponse->head.len = static_cast<uint32_t>(lenBody); // Р·Р°РїРёСЃС‹РІР°РµРј РґР»РёРЅСѓ РїР°РєРµС‚Р°
 			DATA->resize(lenHead + lenBody);
 			break;
 			/*
@@ -245,11 +250,11 @@ public:
 
 	}
 	Msg() {
-		request.body.buff.reserve(DEFAULT_BUFFSIZE_FOR_TCP_PACKAGE);		// Резервируем для сырых данных принятых по сети
+		request.body.buff.reserve(DEFAULT_BUFFSIZE_FOR_TCP_PACKAGE);		// Р РµР·РµСЂРІРёСЂСѓРµРј РґР»СЏ СЃС‹СЂС‹С… РґР°РЅРЅС‹С… РїСЂРёРЅСЏС‚С‹С… РїРѕ СЃРµС‚Рё
 	}
 private:
-	Request request;		// структура запроса
-	Response response;		// структура ответа
+	Request request;		// СЃС‚СЂСѓРєС‚СѓСЂР° Р·Р°РїСЂРѕСЃР°
+	Response response;		// СЃС‚СЂСѓРєС‚СѓСЂР° РѕС‚РІРµС‚Р°
 };
 }
 

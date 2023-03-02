@@ -1,4 +1,3 @@
-#SET(CMAKE_TOOLCHAIN_FILE "C:/Program Files/vcpkg/scripts/buildsystems/vcpkg.cmake")
 if(MINGW)
   include(CheckLibraryExists)
   check_library_exists(ws2_32 AcceptEx "" HAVE_ACCEPT_EX)
@@ -19,9 +18,9 @@ add_executable(Server ${SOURCE_FILES})
 target_include_directories(Server PRIVATE include)
 
 # Настроить библиотеку Asio
-set(ASIO_INCLUDE_DIR "${PROJECT_SOURCE_DIR}/asio-1.24.0/include")
+set(ASIO_INCLUDE_DIR "${PROJECT_SOURCE_DIR}/../asio-1.24.0/include")
 find_library(ASIO_LIB asio ${ASIO_INCLUDE_DIR})
-#include_directories(${ASIO_INCLUDE_DIR})
+include_directories(${ASIO_INCLUDE_DIR})
 
 if(MINGW)
  target_link_libraries(Server ws2_32)

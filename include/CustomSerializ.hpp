@@ -1,6 +1,8 @@
 #ifndef CUSTOM_SERILIALIZATION_HPP
 #define CUSTOM_SERILIALIZATION_HPP
 
+#include <asio/ts/buffer.hpp>
+
 namespace CustomSerializ
 {
 	class Serializer {

@@ -1,7 +1,10 @@
 
 #include <iostream>
-#include <global.hpp>
 #include <locale>
+
+#include <global.hpp>
+
+
 
 using asio::ip::tcp;
 
@@ -10,8 +13,8 @@ int main(int argc, char* argv[])
     uint16_t port = DEFAULT_PORT;
     std::string host = DEFAULT_HOST;
 
-//#ifndef _DEBUG
-    //*******************ПОЛУЧЕНИЕ ПОРТА ДЛЯ ПРОСЛУШИВАНИЯ**********************
+#ifndef _DEBUG
+    //*******************РџРћР›РЈР§Р•РќРР• РџРћР РўРђ Р”Р›РЇ РџР РћРЎР›РЈРЁРР’РђРќРРЇ**********************
     if (argc > 1) {
         std::istringstream iss(argv[1]);
         if (iss >> port) {
@@ -55,75 +58,75 @@ int main(int argc, char* argv[])
             std::cout << "Using host " << host << "." << std::endl;
         }
     }
-//#endif
+#endif
     //************************************************************************
 
 
 
     std::cout << "************** Start TCP CLIENT **************" << std::endl;
-    // Установка локали для корректного отображения русских букв
+    // РЈСЃС‚Р°РЅРѕРІРєР° Р»РѕРєР°Р»Рё РґР»СЏ РєРѕСЂСЂРµРєС‚РЅРѕРіРѕ РѕС‚РѕР±СЂР°Р¶РµРЅРёСЏ СЂСѓСЃСЃРєРёС… Р±СѓРєРІ
     setlocale(LC_ALL, "");
     // 
-    TcpPackage::Request request;            // структура запроса
-    TcpPackage::Response response;          // структура ответа
-    std::vector<uint8_t> Buff(2048);        // буфер для приема и передачи
+    TcpPackage::Request request;            // СЃС‚СЂСѓРєС‚СѓСЂР° Р·Р°РїСЂРѕСЃР°
+    TcpPackage::Response response;          // СЃС‚СЂСѓРєС‚СѓСЂР° РѕС‚РІРµС‚Р°
+    std::vector<uint8_t> Buff(2048);        // Р±СѓС„РµСЂ РґР»СЏ РїСЂРёРµРјР° Рё РїРµСЂРµРґР°С‡Рё
 
         while (true) {
             {
                 try {
-                    // Инициализируем библиотеку asio
+                    // РРЅРёС†РёР°Р»РёР·РёСЂСѓРµРј Р±РёР±Р»РёРѕС‚РµРєСѓ asio
                     asio::io_context io_context;
 
-                    // Создаем объекты для соединения с сервером и отправки данных
+                    // РЎРѕР·РґР°РµРј РѕР±СЉРµРєС‚С‹ РґР»СЏ СЃРѕРµРґРёРЅРµРЅРёСЏ СЃ СЃРµСЂРІРµСЂРѕРј Рё РѕС‚РїСЂР°РІРєРё РґР°РЅРЅС‹С…
                     tcp::socket socket(io_context);
                     tcp::resolver resolver(io_context);
                     asio::connect(socket, resolver.resolve(host, std::to_string(port)));
-                    std::cout << "Соединение с сервером "<< host << ":" << port <<" установлено!" << std::endl;
-                    std::cout << "Примеры запроса: 'c:/' или 'd:/music' " << std::endl;
+                    std::cout << "РЎРѕРµРґРёРЅРµРЅРёРµ СЃ СЃРµСЂРІРµСЂРѕРј "<< host << ":" << port <<" СѓСЃС‚Р°РЅРѕРІР»РµРЅРѕ!" << std::endl;
+                    std::cout << "РџСЂРёРјРµСЂС‹ Р·Р°РїСЂРѕСЃР°: 'c:/' РёР»Рё 'd:/music' " << std::endl;
                     while (true) {
                         Buff.clear();
                         Buff.resize(2048);
-                        // Читаем пользовательский ввод из консоли
-                        std::cout << "Введите запрос: ";
+                        // Р§РёС‚Р°РµРј РїРѕР»СЊР·РѕРІР°С‚РµР»СЊСЃРєРёР№ РІРІРѕРґ РёР· РєРѕРЅСЃРѕР»Рё
+                        std::cout << "Р’РІРµРґРёС‚Рµ Р·Р°РїСЂРѕСЃ: ";
                         std::string input;
                         std::getline(std::cin, input);
 
-                        // Формируем структуру запроса
+                        // Р¤РѕСЂРјРёСЂСѓРµРј СЃС‚СЂСѓРєС‚СѓСЂСѓ Р·Р°РїСЂРѕСЃР°
                         request.head.type = TcpPackage::GetFileList_TYPE;
                         request.head.len = static_cast<uint32_t>(input.size());
-                        // резервируем место в буфере
+                        // СЂРµР·РµСЂРІРёСЂСѓРµРј РјРµСЃС‚Рѕ РІ Р±СѓС„РµСЂРµ
 
                         request.body.buff.resize(input.size());
                         std::memcpy(request.body.buff.data(), input.c_str(), input.size());
                         {
-                            //Указатель на буфер для ускорения сериализации
+                            //РЈРєР°Р·Р°С‚РµР»СЊ РЅР° Р±СѓС„РµСЂ РґР»СЏ СѓСЃРєРѕСЂРµРЅРёСЏ СЃРµСЂРёР°Р»РёР·Р°С†РёРё
                             asio::mutable_buffer buffer(Buff.data(), Buff.capacity() + 4);
                             
-                            // указатель на ачало чтобы потом вписать длину тела
+                            // СѓРєР°Р·Р°С‚РµР»СЊ РЅР° Р°С‡Р°Р»Рѕ С‡С‚РѕР±С‹ РїРѕС‚РѕРј РІРїРёСЃР°С‚СЊ РґР»РёРЅСѓ С‚РµР»Р°
                             TcpPackage::Request* ptrHead = reinterpret_cast<TcpPackage::Request*>(buffer.data());
                             size_t lenHead, lenBody;
 
-                            // сериализуем запрос
+                            // СЃРµСЂРёР°Р»РёР·СѓРµРј Р·Р°РїСЂРѕСЃ
                             lenHead = request.head.serialize(buffer);
                             lenBody = request.body.serialize(buffer);
                             ptrHead->head.len = static_cast<uint32_t>(lenBody);
                             Buff.resize(lenHead + lenBody);
 
-                            // Отправляем запрос на сервер
+                            // РћС‚РїСЂР°РІР»СЏРµРј Р·Р°РїСЂРѕСЃ РЅР° СЃРµСЂРІРµСЂ
                             asio::write(socket, asio::buffer(Buff.data(), Buff.size()));
                         }
 
 
-                        // Получаем ответ от сервера
+                        // РџРѕР»СѓС‡Р°РµРј РѕС‚РІРµС‚ РѕС‚ СЃРµСЂРІРµСЂР°
                         size_t response_length = asio::read(socket, asio::buffer(&response, sizeof(response.head)));
-                        std::cerr << "Ожидаем прием тела длиной: " << response.head.len << std::endl;
+                        std::cerr << "РћР¶РёРґР°РµРј РїСЂРёРµРј С‚РµР»Р° РґР»РёРЅРѕР№: " << response.head.len << std::endl;
                         
-                        // Резервируем пространство под данные
+                        // Р РµР·РµСЂРІРёСЂСѓРµРј РїСЂРѕСЃС‚СЂР°РЅСЃС‚РІРѕ РїРѕРґ РґР°РЅРЅС‹Рµ
                         Buff.resize(response.head.len);
                         response_length = asio::read(socket, asio::buffer(Buff));
 
-                        // Выводим ответ на экран
-                        std::cout << "Ответ от сервера: " << std::endl;
+                        // Р’С‹РІРѕРґРёРј РѕС‚РІРµС‚ РЅР° СЌРєСЂР°РЅ
+                        std::cout << "РћС‚РІРµС‚ РѕС‚ СЃРµСЂРІРµСЂР°: " << std::endl;
 
                         asio::mutable_buffer bufferFile(Buff.data(), Buff.size());
                         response.body.deserialize(bufferFile);
@@ -135,7 +138,7 @@ int main(int argc, char* argv[])
                         std::cout << std::endl;
                     }
                 } catch (std::exception& e) {
-                    std::cerr << "Ошибка подключения к " <<host<<":"<< port << std::endl <<"e.what()->" << e.what() << std::endl;
+                    std::cerr << "РћС€РёР±РєР° РїРѕРґРєР»СЋС‡РµРЅРёСЏ Рє " <<host<<":"<< port << std::endl <<"e.what()->" << e.what() << std::endl;
                     Sleep(1000);
                 }
                 

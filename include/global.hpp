@@ -7,16 +7,7 @@
 #include <filesystem>
 #include <array>
 
-/*
-#include<boost/serialization/serialization.hpp>
-#include<boost/serialization/nvp.hpp>
 
-#include<boost/serialization/string.hpp>
-#include<boost/serialization/vector.hpp>
-
-#include <boost/archive/binary_iarchive.hpp>
-#include <boost/archive/binary_oarchive.hpp>
-*/
 #ifdef _WIN32
  #define _WIN32_WINNT 0x0A00
 #endif
@@ -28,7 +19,6 @@
 #include <asio/ts/internet.hpp>
 
 
-#include<CustomSerializ.hpp>
 #include<TcpPackage.hpp>
 
 #define  DEFAULT_PORT  12345
