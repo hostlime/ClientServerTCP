@@ -21,7 +21,7 @@ namespace TcpPackage
 			//{<путь к файлу>, <тип файла>, <размер файла>}
 			std::string path;
 			std::string type;
-			UINT32 size = 0;
+			uint32_t size = 0;
 
 			// Бинарная сериализация
 			static void serialize(FileDescriprion const& value, CustomSerializ::Serializer& s) {
