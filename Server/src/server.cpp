@@ -13,14 +13,17 @@ public:
 	using ValueType = std::vector<uint8_t>;
 
 	Cache(std::chrono::seconds lifetime) : lifetime_(lifetime) {}
-	// вставка
+	// Добавление данных
 	void insert(const KeyType &key, const ValueType &value)
 	{
+		std::lock_guard<std::mutex> lock(guard_mutex);
 		cache_[key] = {value, std::chrono::system_clock::now()};
 	}
-	// проверка на наличие
+	// Дтение данных при наличии 
+	// возвращает true  если данные есть
 	bool find(const KeyType &key, ValueType &value)
 	{
+		std::lock_guard<std::mutex> lock(guard_mutex);
 		auto it = cache_.find(key);
 		if (it != cache_.end())
 		{
@@ -44,6 +47,7 @@ private:
 
 	std::unordered_map<KeyType, CacheItem> cache_;
 	std::chrono::seconds lifetime_;
+	std::mutex guard_mutex;
 };
 
 class Session : public std::enable_shared_from_this<Session>
@@ -163,7 +167,7 @@ private:
 int main(int argc, char *argv[])
 {
 
-	Cache cache(std::chrono::seconds(60));
+	Cache cache(std::chrono::seconds(600));
 
 	std::string request_key = "key";
 	std::vector<uint8_t> response_value;
