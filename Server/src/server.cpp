@@ -2,58 +2,12 @@
 #include <thread>
 
 #include <global.hpp>
-
-#include <unordered_map>
-#include <chrono>
-
-class Cache
-{
-public:
-	using KeyType = std::string;
-	using ValueType = std::vector<uint8_t>;
-
-	Cache(std::chrono::seconds lifetime) : lifetime_(lifetime) {}
-	// Добавление данных
-	void insert(const KeyType &key, const ValueType &value)
-	{
-		std::lock_guard<std::mutex> lock(guard_mutex);
-		cache_[key] = {value, std::chrono::system_clock::now()};
-	}
-	// Дтение данных при наличии 
-	// возвращает true  если данные есть
-	bool find(const KeyType &key, ValueType &value)
-	{
-		std::lock_guard<std::mutex> lock(guard_mutex);
-		auto it = cache_.find(key);
-		if (it != cache_.end())
-		{
-			if (std::chrono::system_clock::now() - it->second.timestamp > lifetime_)
-			{
-				cache_.erase(it);
-				return false;
-			}
-			value = it->second.value;
-			return true;
-		}
-		return false;
-	}
-
-private:
-	struct CacheItem
-	{
-		ValueType value;
-		std::chrono::time_point<std::chrono::system_clock> timestamp;
-	};
-
-	std::unordered_map<KeyType, CacheItem> cache_;
-	std::chrono::seconds lifetime_;
-	std::mutex guard_mutex;
-};
+#include <cache.hpp>
 
 class Session : public std::enable_shared_from_this<Session>
 {
 public:
-	Session(asio::ip::tcp::socket socket) : socket_(std::move(socket)) {}
+	Session(asio::ip::tcp::socket socket, cache::Cache &cache) : socket_(std::move(socket)), cache_(cache) {}
 	asio::ip::tcp::socket &socket() { return socket_; }
 	void start()
 	{
@@ -102,7 +56,18 @@ private:
 								 std::cout << std::endl;
 								 //**************************ФОРМИРУЕМ ДАННЫЕ ДЛЯ ОТВЕТА***************************
 								 auto package = std::make_shared<std::vector<uint8_t>>();
-								 tcpPackage->makeResponse(package);
+
+								 // ключ вектором не может быть поэтому копируем вектор в строку
+								 std::string strResponseBody(tcpPackage->requestBodyData()->begin(), tcpPackage->requestBodyData()->end());
+								 std::vector<uint8_t> &package_ref = *package; // создаем ссылку на вектор а не шаред птр
+								 // получаем данные из кеша
+								 if (!cache_.get(strResponseBody, package_ref))
+								 { // данных в кеше не нашлось
+									 tcpPackage->makeResponse(package);
+									 // заносим данные в кэш
+									 cache_.insert(strResponseBody, package_ref);
+								 }
+
 								 doWrite(package);
 								 //**********************************************************************************
 							 }
@@ -133,13 +98,15 @@ private:
 						  });
 	}
 	asio::ip::tcp::socket socket_;
+	cache::Cache &cache_;
 };
 
 class Server
 {
 public:
 	Server(asio::io_context &io_context, uint16_t port) : io_context_(io_context),
-														  acceptor_(io_context, asio::ip::tcp::endpoint(asio::ip::tcp::v4(), port))
+														  acceptor_(io_context, asio::ip::tcp::endpoint(asio::ip::tcp::v4(), port)),
+														  сache_(std::chrono::seconds(CACHE_LIFETIME))
 	{
 		std::cout << "The TCP server is listening on port " << port << std::endl;
 		doAccept();
@@ -152,7 +119,7 @@ private:
 		acceptor_.async_accept(*socket, [this, socket](const std::error_code &error)
 							   {
 			if (!error) {
-				auto new_session = std::make_shared<Session>(std::move(*socket));
+				auto new_session = std::make_shared<Session>(std::move(*socket), сache_);
 				new_session->start();
 			} else {
 				// обработка ошибки
@@ -162,28 +129,11 @@ private:
 	}
 	asio::ip::tcp::acceptor acceptor_;
 	asio::io_context &io_context_;
+	cache::Cache сache_; // класс кэша
 };
 
 int main(int argc, char *argv[])
 {
-
-	Cache cache(std::chrono::seconds(600));
-
-	std::string request_key = "key";
-	std::vector<uint8_t> response_value;
-	response_value.push_back(0x55);
-
-	cache.insert(request_key, response_value);
-
-	if (cache.find(request_key, response_value))
-	{
-		__nop;
-	}
-	if (cache.find("dfdfdf", response_value))
-	{
-		__nop;
-	}
-
 	//*******************ПОЛУЧЕНИЕ ПОРТА ДЛЯ ПРОСЛУШИВАНИЯ**********************
 	uint16_t port = DEFAULT_PORT;
 #ifndef _DEBUG
