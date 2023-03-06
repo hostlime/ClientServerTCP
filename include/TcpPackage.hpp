@@ -71,6 +71,15 @@ namespace TcpPackage
 			buffer += d.offset();
 			return d.offset();
 		}
+		// Получение размера данных после сериализации
+		std::size_t getSizeSerializeData()
+		{
+			// Данные не будут копироваться в nullptr,
+			// так как nullptr является недопустимым указателем на объект.
+			// Поэтому скорость выполнения данной функции значительно быстрее чем обычная сериализация
+			asio::mutable_buffer buffer(nullptr, 0);
+			return serialize(buffer);
+		}
 	};
 	// Структура ТЕЛА ответа
 	struct ResponseBody
@@ -102,6 +111,15 @@ namespace TcpPackage
 			}
 			buffer += d.offset();
 			// return d.offset(); затруднительно посчитать реальную длину на выходе
+		}
+		// Получение размера данных после сериализации
+		std::size_t getSizeSerializeData()
+		{
+			// Данные не будут копироваться в nullptr,
+			// так как nullptr является недопустимым указателем на объект.
+			// Поэтому скорость выполнения данной функции значительно быстрее чем обычная сериализация
+			asio::mutable_buffer buffer(nullptr, 0);
+			return serialize(buffer);
 		}
 	};
 	struct RequestBody
@@ -244,30 +262,31 @@ namespace TcpPackage
 				size_t lenHead, lenBody;
 				//************************десериализуем тело запроса***************************
 				{
-					DATA->resize(1024);
+					// скоуп из-за локальной переменной buffer
 					asio::mutable_buffer buffer(request.body.buff.data(), request.body.buff.size()); // сериализация пока только с mutable_buffer(для скорости)
 					lenBody = request.body.deserialize(buffer);
-					// Преобразование array в строку
-					std::string spath(request.body.buff.begin(), request.body.buff.end());
-					fs::path file_path = fs::path(spath);
-					// Заполняем информацию о файлах по пути file_path
-					WriteFileList(response.body.files, file_path);
-					DATA->resize(
-						response.body.files.size() * sizeof(response.body.files) // размер структуры
-						+ response.body.files.size() * (3 * 4)					 // учитываем байт который добавляется при сериализации
-						+ 1024													 // просто запас
-					);															 // на всякий слачай резирвируем больше данных чтобы десереализованные данные не вышли за границу
 				}
-				// Сериализуем данные для дальнейшей отправки
+				// Преобразование array в строку
+				std::string spath(request.body.buff.begin(), request.body.buff.end());
+				fs::path file_path = fs::path(spath);
+				// Заполняем информацию о файлах по пути file_path
+				WriteFileList(response.body.files, file_path);
+				// Ресайзим вектор на размер заголовка и тела сериализованных данных
+				lenHead = response.head.getSizeSerializeData();
+				lenBody = response.body.getSizeSerializeData();
+				DATA->resize(lenHead + lenBody);
+
+				// создаем буффер для дальнейшей отправки
 				asio::mutable_buffer buffer(DATA->data(), DATA->size());
 				Response *ptrResponse = reinterpret_cast<Response *>(buffer.data());
 
+				// сериализум данные
 				lenHead = response.head.serialize(buffer);
 				lenBody = response.body.serialize(buffer);
 
 				ptrResponse->head.type = request.head.type;				// копируем тип
 				ptrResponse->head.len = static_cast<uint32_t>(lenBody); // записываем длину пакета
-				DATA->resize(lenHead + lenBody);
+
 				break;
 				/*
 			case TYPE_2:
