@@ -281,8 +281,8 @@ namespace TcpPackage
 				Response *ptrResponse = reinterpret_cast<Response *>(buffer.data());
 
 				// сериализум данные
-				lenHead = response.head.serialize(buffer);
-				lenBody = response.body.serialize(buffer);
+				response.head.serialize(buffer);
+				response.body.serialize(buffer);
 
 				ptrResponse->head.type = request.head.type;				// копируем тип
 				ptrResponse->head.len = static_cast<uint32_t>(lenBody); // записываем длину пакета
