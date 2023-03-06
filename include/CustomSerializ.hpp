@@ -14,6 +14,10 @@ namespace CustomSerializ
 		template <typename T>
 		void operator()(T const &value)
 		{
+			// В задумке memcpy не должен был работать с nullptr,
+			// но т.к мы к buffer_.data() добавляем offset_ то приходится проверять самостоятельно
+			// на первый взгляд это кажется не самым лучшим решением, но мы теряем всего лишь несколько тактов процессорного времени
+			// т.к зачастую проверку на nullptr можно осуществить одной командой процессора
 			if (buffer_.data() != nullptr)
 				std::memcpy((static_cast<uint8_t *>(buffer_.data()) + offset_), &value, sizeof(T));
 			offset_ += sizeof(T);
